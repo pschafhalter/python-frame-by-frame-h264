@@ -11,4 +11,5 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = { version = "0.23.3", features = ["extension-module"] }
 openh264 = "0.6.6"
+openh264-sys2 = "0.6.6"
 numpy = "0.23.0"

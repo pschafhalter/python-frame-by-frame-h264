@@ -260,6 +260,7 @@ version = "0.1.0"
 dependencies = [
  "numpy",
  "openh264",
+ "openh264-sys2",
  "pyo3",
 ]
 

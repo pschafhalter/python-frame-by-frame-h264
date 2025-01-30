@@ -4,8 +4,10 @@ use openh264::{
     formats::{RgbSliceU8, YUVBuffer},
     Timestamp,
 };
+use openh264_sys2;
+
 use pyo3::{
-    exceptions::{PyRuntimeError, PyValueError},
+    exceptions::{PyMemoryError, PyRuntimeError, PyValueError},
     prelude::*,
 };
 
@@ -45,6 +47,20 @@ fn parse_sps_pps_strategy(
         }
         "SpsPpsListing" => Ok(openh264::encoder::SpsPpsStrategy::SpsPpsListing),
         _ => Err("Invalid SPS/PPS strategy"),
+    }
+}
+
+fn from_raw_api_result<T>(result: openh264_sys2::CM_RETURN, value: T) -> PyResult<T> {
+    match result {
+        openh264_sys2::cmResultSuccess => Ok(value),
+        openh264_sys2::cmInitParaError => Err(PyValueError::new_err("Invalid parameter")),
+        openh264_sys2::cmUnknownReason => Err(PyRuntimeError::new_err("Unknown error")),
+        openh264_sys2::cmMallocMemeError => Err(PyMemoryError::new_err("Memory allocation error")),
+        openh264_sys2::cmInitExpected => Err(PyRuntimeError::new_err("Initialization expected")),
+        _ => Err(PyRuntimeError::new_err(format!(
+            "Error setting option: {}",
+            result
+        ))),
     }
 }
 
@@ -135,5 +151,42 @@ impl H264Encoder {
                 ))
             })?;
         Ok(bitstream.to_vec())
+    }
+
+    #[setter]
+    fn set_bitrate_bps(&mut self, bitrate_bps: u32) -> PyResult<()> {
+        let mut bitrate_info = openh264_sys2::SBitrateInfo::default();
+        bitrate_info.iLayer = openh264_sys2::SPATIAL_LAYER_ALL;
+        bitrate_info.iBitrate = bitrate_bps as i32;
+
+        let bitrate_ptr: *mut openh264_sys2::TagBitrateInfo = &mut bitrate_info;
+
+        let result = unsafe {
+            self.encoder.raw_api().set_option(
+                // openh264_sys2::ENCODER_OPTION_MAX_BITRATE,
+                openh264_sys2::ENCODER_OPTION_BITRATE,
+                bitrate_ptr as *mut core::ffi::c_void,
+            )
+        };
+
+        from_raw_api_result(result, ())
+    }
+
+    #[getter]
+    fn get_bitrate_bps(&mut self) -> PyResult<u32> {
+        let mut bitrate_info = openh264_sys2::SBitrateInfo::default();
+        bitrate_info.iLayer = openh264_sys2::SPATIAL_LAYER_ALL;
+
+        let bitrate_ptr: *mut openh264_sys2::TagBitrateInfo = &mut bitrate_info;
+
+        let result = unsafe {
+            self.encoder.raw_api().get_option(
+                // openh264_sys2::ENCODER_OPTION_MAX_BITRATE,
+                openh264_sys2::ENCODER_OPTION_BITRATE,
+                bitrate_ptr as *mut core::ffi::c_void,
+            )
+        };
+
+        from_raw_api_result(result, bitrate_info.iBitrate as u32)
     }
 }
